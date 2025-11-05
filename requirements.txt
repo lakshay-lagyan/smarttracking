@@ -1,0 +1,37 @@
+# Core Framework
+Flask==3.0.0
+Werkzeug==3.0.1
+gunicorn==21.2.0
+python-dotenv==1.0.0
+
+# Database & ORM
+SQLAlchemy==2.0.23
+Flask-SQLAlchemy==3.1.1
+Flask-Migrate==4.0.5
+
+# Security & Auth
+Flask-JWT-Extended==4.5.3
+Flask-Bcrypt==1.0.1
+bcrypt==4.1.1
+
+# NumPy MUST be installed first
+numpy==1.24.3
+
+# Face Recognition & ML
+deepface==0.0.79
+opencv-python-headless==4.8.1.78
+tensorflow==2.15.0
+tf-keras==2.15.0
+Pillow==10.1.0
+mtcnn==0.1.1
+
+# Vector Search
+faiss-cpu==1.7.4
+
+# Utilities
+requests==2.31.0
+python-dateutil==2.8.2
+pytz==2023.3
+
+# Development
+flask-cors==4.0.0

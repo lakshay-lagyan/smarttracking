@@ -1,0 +1,358 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard - Smart Attendance{% endblock %}
+
+{% block navigation %}
+<!-- Desktop Navigation -->
+<nav class="bg-white shadow-lg hidden md:block">
+    <div class="container mx-auto px-4">
+        <div class="flex justify-between items-center py-4">
+            <div class="flex items-center space-x-4">
+                <i class="fas fa-user-shield text-2xl text-purple-600"></i>
+                <span class="text-xl font-bold text-gray-800">Admin Panel</span>
+            </div>
+            <div class="flex items-center space-x-6">
+                <a href="/admin" class="text-purple-600 font-semibold">
+                    <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
+                </a>
+                <span id="adminName" class="text-gray-700 font-medium"></span>
+                <button onclick="logout()" class="text-red-600 hover:text-red-700">
+                    <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                </button>
+            </div>
+        </div>
+    </div>
+</nav>
+
+<!-- Mobile Navigation -->
+<nav class="mobile-nav bg-white shadow-lg md:hidden">
+    <div class="flex justify-around items-center py-3">
+        <a href="/admin" class="flex flex-col items-center text-purple-600">
+            <i class="fas fa-tachometer-alt text-xl mb-1"></i>
+            <span class="text-xs">Dashboard</span>
+        </a>
+        <button onclick="logout()" class="flex flex-col items-center text-gray-600">
+            <i class="fas fa-sign-out-alt text-xl mb-1"></i>
+            <span class="text-xs">Logout</span>
+        </button>
+    </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto mb-20 md:mb-8">
+    <!-- Header -->
+    <div class="mb-8">
+        <h1 class="text-3xl md:text-4xl font-bold text-gray-800 mb-2">Admin Dashboard</h1>
+        <p class="text-gray-600">Manage users and enrollment requests</p>
+    </div>
+    
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-8">
+        <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-4 md:p-6 text-white card-hover">
+            <div class="text-2xl md:text-3xl font-bold mb-1" id="totalUsers">0</div>
+            <div class="text-xs md:text-sm opacity-90">Total Users</div>
+        </div>
+        
+        <div class="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-4 md:p-6 text-white card-hover">
+            <div class="text-2xl md:text-3xl font-bold mb-1" id="activeUsers">0</div>
+            <div class="text-xs md:text-sm opacity-90">Active Users</div>
+        </div>
+        
+        <div class="bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-xl p-4 md:p-6 text-white card-hover">
+            <div class="text-2xl md:text-3xl font-bold mb-1" id="pendingRequests">0</div>
+            <div class="text-xs md:text-sm opacity-90">Pending Requests</div>
+        </div>
+        
+        <div class="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-4 md:p-6 text-white card-hover">
+            <div class="text-2xl md:text-3xl font-bold mb-1" id="todayAttendance">0</div>
+            <div class="text-xs md:text-sm opacity-90">Today's Attendance</div>
+        </div>
+    </div>
+    
+    <!-- Enrollment Requests -->
+    <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
+        <h2 class="text-xl md:text-2xl font-bold text-gray-800 mb-6">
+            <i class="fas fa-user-clock text-yellow-500 mr-2"></i>Pending Enrollment Requests
+        </h2>
+        
+        <div id="requestsContainer" class="space-y-4">
+            <div class="text-center py-8 text-gray-500">
+                <i class="fas fa-spinner fa-spin text-3xl mb-3"></i>
+                <p>Loading requests...</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Recent Attendance -->
+    <div class="bg-white rounded-xl shadow-lg p-6">
+        <h2 class="text-xl md:text-2xl font-bold text-gray-800 mb-6">
+            <i class="fas fa-clock text-blue-500 mr-2"></i>Recent Attendance
+        </h2>
+        
+        <div id="attendanceContainer" class="space-y-3">
+            <div class="text-center py-8 text-gray-500">
+                <i class="fas fa-spinner fa-spin text-3xl mb-3"></i>
+                <p>Loading attendance...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Request Details Modal -->
+<div id="requestModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-xl max-w-2xl w-full max-h-screen overflow-y-auto">
+        <div class="p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-2xl font-bold text-gray-800">Enrollment Request Details</h3>
+                <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times text-2xl"></i>
+                </button>
+            </div>
+            
+            <div id="modalContent"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Check authentication and role
+    if (!checkAuth()) {
+        window.location.href = '/login';
+    }
+    
+    const user = getCurrentUser();
+    if (user) {
+        if (!['admin', 'super_admin'].includes(user.role)) {
+            window.location.href = '/dashboard';
+        }
+        document.getElementById('adminName').textContent = user.name;
+    }
+    
+    // Load stats
+    async function loadStats() {
+        try {
+            const response = await apiCall('/api/admin/stats');
+            const data = await response.json();
+            
+            if (response.ok) {
+                document.getElementById('totalUsers').textContent = data.total_users;
+                document.getElementById('activeUsers').textContent = data.active_users;
+                document.getElementById('pendingRequests').textContent = data.pending_requests;
+                document.getElementById('todayAttendance').textContent = data.today_attendance;
+                
+                displayRecentAttendance(data.recent_attendance);
+            }
+        } catch (error) {
+            console.error('Failed to load stats:', error);
+        }
+    }
+    
+    // Load enrollment requests
+    async function loadRequests() {
+        const container = document.getElementById('requestsContainer');
+        
+        try {
+            const response = await apiCall('/api/admin/enrollment-requests?status=pending');
+            const data = await response.json();
+            
+            if (response.ok && data.requests && data.requests.length > 0) {
+                container.innerHTML = '';
+                data.requests.forEach(request => {
+                    const requestHTML = `
+                        <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition">
+                            <div class="flex flex-col md:flex-row justify-between items-start md:items-center">
+                                <div class="mb-4 md:mb-0">
+                                    <h4 class="text-lg font-semibold text-gray-800">${request.name}</h4>
+                                    <p class="text-gray-600">${request.email}</p>
+                                    <p class="text-sm text-gray-500">${request.department || 'No department'}</p>
+                                    <p class="text-xs text-gray-400 mt-1">
+                                        Submitted: ${new Date(request.submitted_at).toLocaleString()}
+                                    </p>
+                                </div>
+                                <div class="flex space-x-2">
+                                    <button onclick="viewRequest(${request.id})" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                                        <i class="fas fa-eye mr-1"></i>View
+                                    </button>
+                                    <button onclick="approveRequest(${request.id})" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
+                                        <i class="fas fa-check mr-1"></i>Approve
+                                    </button>
+                                    <button onclick="showRejectModal(${request.id})" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700">
+                                        <i class="fas fa-times mr-1"></i>Reject
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    container.innerHTML += requestHTML;
+                });
+            } else {
+                container.innerHTML = `
+                    <div class="text-center py-12 text-gray-500">
+                        <i class="fas fa-inbox text-5xl mb-4"></i>
+                        <p class="text-lg">No pending enrollment requests</p>
+                    </div>
+                `;
+            }
+        } catch (error) {
+            container.innerHTML = `
+                <div class="text-center py-8 text-red-500">
+                    <i class="fas fa-exclamation-circle text-3xl mb-3"></i>
+                    <p>Failed to load requests</p>
+                </div>
+            `;
+        }
+    }
+    
+    // Display recent attendance
+    function displayRecentAttendance(records) {
+        const container = document.getElementById('attendanceContainer');
+        
+        if (records && records.length > 0) {
+            container.innerHTML = '';
+            records.forEach(record => {
+                const date = new Date(record.timestamp);
+                const recordHTML = `
+                    <div class="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
+                        <div class="flex items-center">
+                            <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center mr-4">
+                                <i class="fas fa-user text-green-600"></i>
+                            </div>
+                            <div>
+                                <div class="font-semibold text-gray-800">${record.name}</div>
+                                <div class="text-sm text-gray-600">${date.toLocaleString()}</div>
+                            </div>
+                        </div>
+                        <span class="text-sm text-gray-600">${(record.confidence * 100).toFixed(1)}% match</span>
+                    </div>
+                `;
+                container.innerHTML += recordHTML;
+            });
+        } else {
+            container.innerHTML = `
+                <div class="text-center py-8 text-gray-500">
+                    <i class="fas fa-inbox text-3xl mb-3"></i>
+                    <p>No attendance records today</p>
+                </div>
+            `;
+        }
+    }
+    
+    // View request details
+    async function viewRequest(requestId) {
+        try {
+            const response = await apiCall('/api/admin/enrollment-requests?status=pending');
+            const data = await response.json();
+            
+            if (response.ok) {
+                const request = data.requests.find(r => r.id === requestId);
+                if (request) {
+                    const imagesHTML = request.images.map((img, idx) => `
+                        <img src="${img}" class="w-full h-48 object-cover rounded-lg">
+                    `).join('');
+                    
+                    document.getElementById('modalContent').innerHTML = `
+                        <div class="space-y-4">
+                            <div class="grid grid-cols-2 gap-4">
+                                <div><strong>Name:</strong> ${request.name}</div>
+                                <div><strong>Email:</strong> ${request.email}</div>
+                                <div><strong>Phone:</strong> ${request.phone || 'N/A'}</div>
+                                <div><strong>Department:</strong> ${request.department || 'N/A'}</div>
+                            </div>
+                            <div>
+                                <strong class="block mb-2">Face Photos:</strong>
+                                <div class="grid grid-cols-3 gap-4">
+                                    ${imagesHTML}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    document.getElementById('requestModal').classList.remove('hidden');
+                    document.getElementById('requestModal').classList.add('flex');
+                }
+            }
+        } catch (error) {
+            showToast('Failed to load request details', 'error');
+        }
+    }
+    
+    function closeModal() {
+        document.getElementById('requestModal').classList.add('hidden');
+        document.getElementById('requestModal').classList.remove('flex');
+    }
+    
+    // Approve request
+    async function approveRequest(requestId) {
+        if (!confirm('Are you sure you want to approve this enrollment request?')) {
+            return;
+        }
+        
+        showLoading();
+        
+        try {
+            const response = await apiCall(`/api/admin/enrollment-requests/${requestId}/approve`, {
+                method: 'POST'
+            });
+            
+            const data = await response.json();
+            hideLoading();
+            
+            if (response.ok) {
+                showToast(data.message, 'success');
+                loadStats();
+                loadRequests();
+            } else {
+                showToast(data.error || 'Failed to approve request', 'error');
+            }
+        } catch (error) {
+            hideLoading();
+            showToast('An error occurred', 'error');
+        }
+    }
+    
+    // Reject request
+    function showRejectModal(requestId) {
+        const reason = prompt('Enter rejection reason:');
+        if (reason) {
+            rejectRequest(requestId, reason);
+        }
+    }
+    
+    async function rejectRequest(requestId, reason) {
+        showLoading();
+        
+        try {
+            const response = await apiCall(`/api/admin/enrollment-requests/${requestId}/reject`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reason })
+            });
+            
+            const data = await response.json();
+            hideLoading();
+            
+            if (response.ok) {
+                showToast(data.message, 'success');
+                loadStats();
+                loadRequests();
+            } else {
+                showToast(data.error || 'Failed to reject request', 'error');
+            }
+        } catch (error) {
+            hideLoading();
+            showToast('An error occurred', 'error');
+        }
+    }
+    
+    // Initialize
+    loadStats();
+    loadRequests();
+    
+    // Auto refresh every 30 seconds
+    setInterval(() => {
+        loadStats();
+        loadRequests();
+    }, 30000);
+</script>
+{% endblock %}

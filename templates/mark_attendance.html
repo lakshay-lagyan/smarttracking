@@ -1,0 +1,264 @@
+{% extends "base.html" %}
+
+{% block title %}Mark Attendance - Smart Attendance{% endblock %}
+
+{% block navigation %}
+<!-- Desktop Navigation -->
+<nav class="bg-white shadow-lg hidden md:block">
+    <div class="container mx-auto px-4">
+        <div class="flex justify-between items-center py-4">
+            <div class="flex items-center space-x-4">
+                <i class="fas fa-camera text-2xl text-purple-600"></i>
+                <span class="text-xl font-bold text-gray-800">Smart Attendance</span>
+            </div>
+            <div class="flex items-center space-x-6">
+                <a href="/dashboard" class="text-gray-600 hover:text-purple-600">
+                    <i class="fas fa-home mr-2"></i>Dashboard
+                </a>
+                <a href="/mark-attendance" class="text-purple-600 font-semibold">
+                    <i class="fas fa-camera mr-2"></i>Mark Attendance
+                </a>
+                <button onclick="logout()" class="text-red-600 hover:text-red-700">
+                    <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                </button>
+            </div>
+        </div>
+    </div>
+</nav>
+
+<!-- Mobile Navigation -->
+<nav class="mobile-nav bg-white shadow-lg md:hidden">
+    <div class="flex justify-around items-center py-3">
+        <a href="/dashboard" class="flex flex-col items-center text-gray-600">
+            <i class="fas fa-home text-xl mb-1"></i>
+            <span class="text-xs">Home</span>
+        </a>
+        <a href="/mark-attendance" class="flex flex-col items-center text-purple-600">
+            <i class="fas fa-camera text-xl mb-1"></i>
+            <span class="text-xs">Attend</span>
+        </a>
+        <button onclick="logout()" class="flex flex-col items-center text-gray-600">
+            <i class="fas fa-sign-out-alt text-xl mb-1"></i>
+            <span class="text-xs">Logout</span>
+        </button>
+    </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto mb-20 md:mb-8">
+    <!-- Header -->
+    <div class="mb-8 text-center">
+        <h1 class="text-3xl md:text-4xl font-bold text-gray-800 mb-2">Mark Attendance</h1>
+        <p class="text-gray-600">Position your face in the camera frame</p>
+    </div>
+    
+    <!-- Camera Card -->
+    <div class="bg-white rounded-xl shadow-2xl overflow-hidden mb-8">
+        <!-- Camera Container -->
+        <div class="relative bg-gray-900 aspect-video md:aspect-[4/3]">
+            <video id="cameraVideo" class="w-full h-full object-cover hidden" autoplay playsinline></video>
+            
+            <canvas id="cameraCanvas" class="hidden"></canvas>
+            
+            <!-- Placeholder -->
+            <div id="cameraPlaceholder" class="absolute inset-0 flex flex-col items-center justify-center text-white">
+                <i class="fas fa-camera text-6xl md:text-8xl mb-6 opacity-50"></i>
+                <p class="text-xl md:text-2xl font-semibold mb-2">Camera Not Started</p>
+                <p class="text-sm md:text-base opacity-75">Click the button below to start</p>
+            </div>
+            
+            <!-- Face Guide Overlay -->
+            <div id="faceGuide" class="absolute inset-0 flex items-center justify-center hidden">
+                <div class="w-48 h-48 md:w-64 md:h-64 border-4 border-green-400 rounded-full opacity-50"></div>
+            </div>
+            
+            <!-- Success Overlay -->
+            <div id="successOverlay" class="absolute inset-0 bg-green-500 bg-opacity-90 flex flex-col items-center justify-center hidden">
+                <i class="fas fa-check-circle text-white text-6xl md:text-8xl mb-4"></i>
+                <p class="text-white text-2xl md:text-3xl font-bold">Attendance Marked!</p>
+            </div>
+        </div>
+        
+        <!-- Controls -->
+        <div class="p-6">
+            <button id="startCameraBtn" onclick="startCamera()" class="w-full bg-gradient-to-r from-purple-600 to-purple-700 text-white font-bold py-4 rounded-lg hover:from-purple-700 hover:to-purple-800 transition mb-4">
+                <i class="fas fa-video mr-2"></i>Start Camera
+            </button>
+            
+            <button id="captureBtn" onclick="captureAndMark()" class="w-full bg-gradient-to-r from-green-600 to-green-700 text-white font-bold py-4 rounded-lg hover:from-green-700 hover:to-green-800 transition hidden">
+                <i class="fas fa-camera mr-2"></i>Capture & Mark Attendance
+            </button>
+            
+            <div id="cameraError" class="hidden mt-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+                <i class="fas fa-exclamation-circle mr-2"></i>
+                <span id="errorMessage">Camera access denied. Please enable camera permissions.</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Instructions -->
+    <div class="bg-blue-50 rounded-xl p-6">
+        <h3 class="text-xl font-bold text-blue-900 mb-4">
+            <i class="fas fa-info-circle mr-2"></i>Instructions
+        </h3>
+        <ul class="space-y-2 text-blue-800">
+            <li class="flex items-start">
+                <i class="fas fa-check text-blue-600 mt-1 mr-3"></i>
+                <span>Make sure you are in a well-lit area</span>
+            </li>
+            <li class="flex items-start">
+                <i class="fas fa-check text-blue-600 mt-1 mr-3"></i>
+                <span>Position your face within the circle guide</span>
+            </li>
+            <li class="flex items-start">
+                <i class="fas fa-check text-blue-600 mt-1 mr-3"></i>
+                <span>Look directly at the camera</span>
+            </li>
+            <li class="flex items-start">
+                <i class="fas fa-check text-blue-600 mt-1 mr-3"></i>
+                <span>Remove sunglasses or masks if wearing</span>
+            </li>
+            <li class="flex items-start">
+                <i class="fas fa-check text-blue-600 mt-1 mr-3"></i>
+                <span>Click "Capture & Mark Attendance" when ready</span>
+            </li>
+        </ul>
+    </div>
+</div>
+
+<script>
+    let stream = null;
+    let cameraStarted = false;
+    
+    async function startCamera() {
+        try {
+            // Request camera with optimal settings for face recognition
+            const constraints = {
+                video: {
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    facingMode: 'user', // Front camera on mobile
+                    frameRate: { ideal: 30 }
+                }
+            };
+            
+            showLoading();
+            
+            stream = await navigator.mediaDevices.getUserMedia(constraints);
+            
+            const video = document.getElementById('cameraVideo');
+            video.srcObject = stream;
+            
+            // Wait for video to be ready
+            await new Promise((resolve) => {
+                video.onloadedmetadata = () => {
+                    video.play();
+                    resolve();
+                };
+            });
+            
+            // Hide placeholder, show video
+            document.getElementById('cameraPlaceholder').classList.add('hidden');
+            document.getElementById('faceGuide').classList.remove('hidden');
+            video.classList.remove('hidden');
+            
+            // Update buttons
+            document.getElementById('startCameraBtn').classList.add('hidden');
+            document.getElementById('captureBtn').classList.remove('hidden');
+            
+            cameraStarted = true;
+            hideLoading();
+            showToast('Camera started successfully', 'success');
+            
+        } catch (error) {
+            hideLoading();
+            console.error('Camera error:', error);
+            
+            let errorMessage = 'Failed to access camera. ';
+            
+            if (error.name === 'NotAllowedError') {
+                errorMessage += 'Please allow camera permissions in your browser settings.';
+            } else if (error.name === 'NotFoundError') {
+                errorMessage += 'No camera device found.';
+            } else if (error.name === 'NotReadableError') {
+                errorMessage += 'Camera is being used by another application.';
+            } else {
+                errorMessage += error.message;
+            }
+            
+            document.getElementById('errorMessage').textContent = errorMessage;
+            document.getElementById('cameraError').classList.remove('hidden');
+            showToast('Camera access failed', 'error');
+        }
+    }
+    
+    async function captureAndMark() {
+        if (!cameraStarted) {
+            showToast('Please start camera first', 'error');
+            return;
+        }
+        
+        try {
+            showLoading();
+            
+            // Capture image from video
+            const video = document.getElementById('cameraVideo');
+            const canvas = document.getElementById('cameraCanvas');
+            const context = canvas.getContext('2d');
+            
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            context.drawImage(video, 0, 0);
+            
+            // Convert to base64
+            const imageData = canvas.toDataURL('image/jpeg', 0.9);
+            
+            // Send to API
+            const response = await apiCall('/api/attendance/mark', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: imageData })
+            });
+            
+            const data = await response.json();
+            
+            hideLoading();
+            
+            if (response.ok) {
+                // Show success overlay
+                document.getElementById('faceGuide').classList.add('hidden');
+                document.getElementById('successOverlay').classList.remove('hidden');
+                
+                showToast(data.message, 'success');
+                
+                // Stop camera
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                }
+                
+                // Redirect to dashboard after 2 seconds
+                setTimeout(() => {
+                    window.location.href = '/dashboard';
+                }, 2000);
+                
+            } else {
+                showToast(data.error || 'Failed to mark attendance', 'error');
+            }
+            
+        } catch (error) {
+            hideLoading();
+            console.error('Capture error:', error);
+            showToast('An error occurred. Please try again.', 'error');
+        }
+    }
+    
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', () => {
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+        }
+    });
+</script>
+{% endblock %}
